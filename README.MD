@@ -1,6 +1,6 @@
-# DABMAN i400 API Test Console
+# DABMAN i200 API Test Console
 
-A Python-based desktop application for controlling and testing the Imperial DABMAN i400 internet radio via its local REST API.
+A Python-based desktop application for controlling and testing the Imperial DABMAN i200 internet radio via its local REST API.
 
 This project provides a custom, industrial-styled Tkinter UI that allows you to trigger API commands, manage presets, control playback, and view raw XML/text responses in a built-in terminal.
 
