@@ -1,25 +1,75 @@
-# DABMAN i400 API Test Console
+# DABMAN i200 Controller
 
-A Python-based desktop application for controlling and testing the Imperial DABMAN i400 internet radio via its local REST API.
+A modular Python/Tkinter desktop application for controlling the **Imperial DABMAN i200** via its local REST API.
 
-This project provides a custom, industrial-styled Tkinter UI that allows you to trigger API commands, manage presets, control playback, and view raw XML/text responses in a built-in terminal.
+This project implements a custom "Industrial" UI to bypass the native web interface, adding features like high-res logo enrichment via Radio-Browser and real-time ICY metadata extraction from live streams.
 
 ## Features
 
-* **Real-Time Status Indicators:** Visual feedback for network connection and current playback state.
-* **Comprehensive API Coverage:** Test zero-parameter lists (System Info, Fav Lists, Status) and parameterized actions (SendKey, Play Station, Volume/Mute).
-* **Built-in API Terminal:** View, scroll, and clear raw HTTP responses directly in the app without needing a separate CLI window. Large XML responses are automatically truncated to maintain UI performance.
-* **Custom Industrial UI:** A sleek, dark-mode interface built purely with standard Tkinter (no external UI libraries required).
+- **High-DPI Support:** Native Windows DPI awareness for sharp text rendering on 4K displays.
+- **Metadata Enrichment:** Fetches high-quality station logos and stream URLs from Radio-Browser API.
+- **Live Track Info:** Continuous polling of ICY metadata (StreamTitle) directly from audio stream headers.
+- **Native Search:** Deep-links into the radio's internal database for station discovery.
+- **API Logging:** Integrated terminal showing raw XML/HTTP request/response cycles.
+- **Modular Design:** Separation of API logic, custom UI widgets, and theme constants.
 
-## Prerequisites
+## Project Structure
 
-* **Python 3.13+**
-* The radio and your computer must be on the same local network.
-* Ensure you know the local IP address of your DABMAN i400 device.
+```text
+.
+├── src/
+│   ├── main.py          # Entry point (High-DPI config & Tkinter loop)
+│   ├── api/
+│   │   └── dabman.py    # DABMANi200 API wrapper
+│   └── gui/
+│       ├── app.py       # Main application logic
+│       ├── widgets.py   # Reusable custom UI components
+│       └── constants.py # Palette and Font definitions
+├── build.bat            # Windows PyInstaller build script
+├── icon.ico             # App icon/favicon
+├── requirements.txt
+└── .gitignore
+```
 
-## Installation
+## Setup
 
-1. **Clone the repository:**
+### Prerequisites
+- Python 3.13+
+- Imperial DABMAN i200 (on the same local network)
+
+### Installation
+1. Clone the repository:
    ```bash
    git clone [https://github.com/Elian0213/dabman-i200-controller.git](https://github.com/Elian0213/dabman-i200-controller.git)
-   cd dabman-i400-controller
+   cd dabman-i200-controller
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Run the application:
+   ```bash
+   python src/main.py
+   ```
+
+## Building Executable
+
+To compile into a standalone `.exe` (Windows):
+
+1. Install PyInstaller:
+   ```bash
+   pip install pyinstaller
+   ```
+2. Run the build script:
+   ```bash
+   ./build.bat
+   ```
+3. Find the output in `dist/DABMAN_Control.exe`.
+
+## Technical Configuration
+
+- **Theme:** Colors and fonts are managed in `src/gui/constants.py`.
+- **Fonts:** Defaulted to **Segoe UI** for UI and **Consolas** for terminal data.
+- **API:** Communicates with the radio via port 80 (commands) and 8080 (visuals).

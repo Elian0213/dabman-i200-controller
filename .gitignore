@@ -1,5 +1,22 @@
+# ── PyInstaller Build Artifacts ──
 build/
 dist/
-main.spec
-radio_control.log
+*.spec
+
+# ── Virtual Environments ──
 venv/
+env/
+.env
+
+# ── Logs ──
+radio_control.log
+*.log
+
+# ── Python Cache ──
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── OS Generated Files ──
+.DS_Store
+Thumbs.db
