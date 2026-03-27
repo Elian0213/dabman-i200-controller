@@ -6,6 +6,105 @@ from .constants import *
 def sep(parent, color=BORDER, **kw):
     tk.Frame(parent, height=1, bg=color, **kw).pack(fill="x")
 
+class MarqueeLabel(tk.Canvas):
+    """A canvas-based label that scrolls text pixel-by-pixel for smooth animation."""
+    def __init__(self, parent, text="", speed=25, **kw):
+        # Intercept and map Label kwargs to Canvas equivalents
+        kw.pop('display_width', None)
+        kw.pop('anchor', None)
+        self.bg_color = kw.pop('bg', BG)
+        self.fg_color = kw.pop('fg', ACCENT_DIM)
+        self.font = kw.pop('font', FONT_STATION2)
+
+        super().__init__(parent, bg=self.bg_color, highlightthickness=0, height=20, **kw)
+
+        self.full_text = text
+        self.speed = speed
+        self._after_id = None
+        self.view_width = 0
+        self.text_width = 0
+        self.gap = 40  # Pixel gap between the end of the text and the looping start
+
+        # We use two text objects to create the seamless looping illusion
+        self.t1 = self.create_text(0, 10, text="", fill=self.fg_color, font=self.font, anchor="w")
+        self.t2 = self.create_text(0, 10, text="", fill=self.fg_color, font=self.font, anchor="w", state="hidden")
+
+        self.bind("<Configure>", self._on_resize)
+        self.set_text(text)
+
+    def config(self, cnf=None, **kw):
+        if cnf:
+            kw.update(cnf)
+
+        if 'text' in kw:
+            self.set_text(kw.pop('text'))
+        if 'fg' in kw:
+            self.fg_color = kw.pop('fg')
+            self.itemconfig(self.t1, fill=self.fg_color)
+            self.itemconfig(self.t2, fill=self.fg_color)
+        if 'bg' in kw:
+            self.bg_color = kw.pop('bg')
+            super().config(bg=self.bg_color)
+
+        kw.pop('display_width', None)
+        kw.pop('anchor', None)
+
+        if kw:
+            super().config(**kw)
+
+    # Alias configure to config to strictly match Tkinter's API
+    configure = config
+
+    def set_text(self, text):
+        if self.full_text == text and self.text_width > 0: return
+        self.full_text = text
+        self.itemconfig(self.t1, text=self.full_text)
+
+        bbox = self.bbox(self.t1)
+        self.text_width = (bbox[2] - bbox[0]) if bbox else 0
+
+        self._reset_animation()
+
+    def _on_resize(self, event):
+        self.view_width = event.width
+        self._reset_animation()
+
+    def _reset_animation(self):
+        if self._after_id:
+            self.after_cancel(self._after_id)
+            self._after_id = None
+
+        cy = self.winfo_height() // 2 or 10
+        self.coords(self.t1, 0, cy)
+
+        if self.text_width > self.view_width and self.view_width > 0:
+            self.itemconfig(self.t2, text=self.full_text, state="normal")
+            self.coords(self.t2, self.text_width + self.gap, cy)
+            self._animate()
+        else:
+            self.itemconfig(self.t2, state="hidden")
+
+    def _animate(self):
+        # Move both text nodes left by 1 pixel
+        self.move(self.t1, -1, 0)
+        self.move(self.t2, -1, 0)
+
+        cy = self.winfo_height() // 2 or 10
+        bbox1 = self.bbox(self.t1)
+        bbox2 = self.bbox(self.t2)
+
+        # If t1 scrolls completely out of view, snap it behind t2
+        if bbox1 and bbox1[2] < 0:
+            self.coords(self.t1, bbox2[2] + self.gap, cy)
+
+        # If t2 scrolls completely out of view, snap it behind t1
+        if bbox2 and bbox2[2] < 0:
+            # Re-fetch bbox1 because t1 might have moved
+            bbox1 = self.bbox(self.t1)
+            self.coords(self.t2, bbox1[2] + self.gap, cy)
+
+        self._after_id = self.after(self.speed, self._animate)
+
 class PanelLabel(tk.Frame):
     def __init__(self, parent, text, **kw):
         super().__init__(parent, bg=BG, **kw)
@@ -97,6 +196,13 @@ class StationRow(tk.Frame):
         self.logo_cv.pack(side="left", padx=(6, 8), pady=6)
         self._placeholder()
 
+        # FIXED LAYOUT: Pack the Play button RIGHT first, before the text frame expands
+        self.play_btn = tk.Label(
+            self, text="▶", bg=PANEL, fg=TEXT_DIM,
+            font=("Courier New", 14), padx=14, cursor="hand2"
+        )
+        self.play_btn.pack(side="right", fill="y")
+
         text_frame = tk.Frame(self, bg=PANEL)
         text_frame.pack(side="left", fill="both", expand=True)
 
@@ -106,9 +212,10 @@ class StationRow(tk.Frame):
         )
         self.name_lbl.pack(fill="x", pady=(6, 1))
 
-        self.track_lbl = tk.Label(
+        # Using MarqueeLabel for long song names in the search results
+        self.track_lbl = MarqueeLabel(
             text_frame, text="Loading live track...", bg=PANEL, fg=ACCENT_DIM,
-            font=FONT_STATION2, anchor="w"
+            font=FONT_STATION2
         )
         self.track_lbl.pack(fill="x")
 
@@ -117,12 +224,6 @@ class StationRow(tk.Frame):
             font=FONT_STATION2, anchor="w"
         )
         self.id_lbl.pack(fill="x", pady=(0, 6))
-
-        self.play_btn = tk.Label(
-            self, text="▶", bg=PANEL, fg=TEXT_DIM,
-            font=("Courier New", 14), padx=14, cursor="hand2"
-        )
-        self.play_btn.pack(side="right", fill="y")
 
         sep(self, color=BORDER)
 

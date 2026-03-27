@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 
 from api.dabman import DABMANi200
 from .constants import *
-from .widgets import PanelLabel, IndustrialEntry, IndustrialButton, StatusIndicator, StationRow, sep
+from .widgets import PanelLabel, IndustrialEntry, IndustrialButton, StatusIndicator, StationRow, MarqueeLabel, sep
 
 class App:
     def __init__(self, root):
@@ -43,6 +43,7 @@ class App:
         # Background workers
         self._poll_radio_logo()
         self._poll_current_track()
+        self._poll_radio_state()
 
     # ── Logging ───────────────────────────────────────────────────────────────
     def ui_log(self, message):
@@ -182,6 +183,24 @@ class App:
         threading.Thread(target=task, daemon=True).start()
         self.root.after(10000, self._poll_current_track) # Poll every 10 seconds
 
+    def _poll_radio_state(self):
+        """Fetches current station name from hardware every 5 seconds."""
+        if self.is_connected:
+            def task():
+                if not self.api_lock.acquire(blocking=False):
+                    return
+                try:
+                    res = self.radio.req("/init?language=en", silent=True)
+                    if res and "<cur_play_name>" in res:
+                        name = res.split("<cur_play_name>")[1].split("</cur_play_name>")[0]
+                        if name != self.current_station_name:
+                            self.root.after(0, self._trigger_now_playing_enrichment, name)
+                finally:
+                    self.api_lock.release()
+            threading.Thread(target=task, daemon=True).start()
+
+        self.root.after(5000, self._poll_radio_state)
+
     def _poll_radio_logo(self):
         """Fallback: Fetches low-res logo from the hardware radio if no hi-res is found."""
         if self.is_connected and self.radio and not self.has_hi_res_logo:
@@ -293,8 +312,12 @@ class App:
         self.now_playing_stn_lbl = tk.Label(col, text="---", bg=BG, fg=TEXT, font=FONT_STATION)
         self.now_playing_stn_lbl.pack(fill="x", pady=(8, 2))
 
-        self.now_playing_trk_lbl = tk.Label(col, text="Ready", bg=BG, fg=ACCENT_GLOW, font=FONT_STATION2)
-        self.now_playing_trk_lbl.pack(fill="x", pady=(0, 16)) # Extra padding before controls
+        # Added MarqueeLabel for main track
+        self.now_playing_trk_lbl = MarqueeLabel(
+            col, text="Ready", bg=BG, fg=ACCENT_GLOW,
+            font=FONT_STATION2
+        )
+        self.now_playing_trk_lbl.pack(fill="x", pady=(0, 16))
 
         # ── 3. Playback & Audio Controls ──────────────────────────────────────
         ctrl_outer = tk.Frame(col, bg=PANEL)
@@ -360,10 +383,6 @@ class App:
                                       font=FONT_LABEL, anchor="w")
         self.search_status.pack(fill="x", pady=(4, 0))
 
-        tk.Frame(col, bg=BG, height=4).pack()
-        IndustrialButton(col, text="▶  PLAY SELECTED", command=self.cmd_play_selected,
-                         accent=GREEN_ON, accent_dark=GREEN_DIM, width=22).pack(anchor="e")
-
     def _build_right(self, col):
         PanelLabel(col, "API Terminal").pack(fill="x", pady=(0, 6))
 
@@ -421,8 +440,9 @@ class App:
 
         for row in self.station_rows:
             row.destroy()
+
         self.station_rows.clear()
-        self.public_stations_cache.clear()
+        self.station_canvas.yview_moveto(0)
         self.selected_index = -1
 
         self.is_searching = True
@@ -493,6 +513,10 @@ class App:
             self.station_rows.append(row)
             self._fetch_station_info_for_row(row, name)
 
+        self.station_frame.update_idletasks()
+        self.station_canvas.configure(scrollregion=self.station_canvas.bbox("all"))
+        self.station_canvas.yview_moveto(0)
+
         self.search_status.config(
             text=f"  ✓  {len(results)} station(s) found  ·  double-click or press ▶ to play",
             fg=GREEN_ON
@@ -512,15 +536,13 @@ class App:
             return
         name, stn_id = self.public_stations_cache[index]
         self.cmd_select_index(index)
-        self.root.after(0, lambda: self.status.set(f"Playing  ›  {name[:20]}", "playing"))
+
+        # We only set the logo to load, we don't spam the network status
         self.root.after(0, lambda: self.logo_label.config(image="", text="LOADING\nLOGO..."))
         self.dispatch_req(f"/play_stn?id={stn_id}")
 
         # Trigger the enrichment specifically for the new station
         self._trigger_now_playing_enrichment(name)
-
-    def cmd_play_selected(self):
-        self.cmd_play_index(self.selected_index)
 
     def cmd_init(self):
         threading.Thread(target=self._init_thread, daemon=True).start()
@@ -536,12 +558,13 @@ class App:
             if txt and "<cur_play_name>" in txt:
                 try:
                     name = txt.split("<cur_play_name>")[1].split("</cur_play_name>")[0]
-                    self.root.after(0, lambda: self.status.set(f"Playing  ›  {name}", "playing"))
+                    # Make the network status purely display "CONNECTED"
+                    self.root.after(0, lambda: self.status.set("CONNECTED", "ok"))
                     self._trigger_now_playing_enrichment(name)
                 except IndexError:
-                    self.root.after(0, lambda: self.status.set("Connected  ·  Idle", "ok"))
+                    self.root.after(0, lambda: self.status.set("CONNECTED", "ok"))
             elif txt:
-                self.root.after(0, lambda: self.status.set("Connected  ·  Idle", "ok"))
+                self.root.after(0, lambda: self.status.set("CONNECTED", "ok"))
             else:
                 self.root.after(0, lambda: self.status.set("Connection failed", "error"))
                 self.is_connected = False
